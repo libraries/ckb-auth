@@ -140,9 +140,10 @@ static int _recover_secp256k1_pubkey(const uint8_t *sig, size_t sig_len,
 }
 
 // Refer to: https://en.bitcoin.it/wiki/BIP_0137
-int get_btc_recid(uint8_t d, bool *compressed, bool *p2sh_hash) {
+int get_btc_recid(uint8_t d, bool *compressed, bool *p2sh_hash, bool *taproot_xonly) {
     *compressed = true;
     *p2sh_hash = false;
+    *taproot_xonly = false;
     if (d >= 27 && d <= 30) {  // P2PKH uncompressed
         *compressed = false;
         return d - 27;
@@ -153,6 +154,9 @@ int get_btc_recid(uint8_t d, bool *compressed, bool *p2sh_hash) {
         return d - 35;
     } else if (d >= 39 && d <= 42) {  // Segwit Bech32
         return d - 39;
+    } else if (d >= 23 && d <= 26) {  // Taproot
+        *taproot_xonly = true;
+        return d -= 23;
     } else {
         return -1;
     }
@@ -186,7 +190,8 @@ static int _recover_secp256k1_pubkey_btc(const uint8_t *sig, size_t sig_len,
     }
     bool compressed = true;
     bool p2sh_hash = false;
-    int recid = get_btc_recid(sig[0], &compressed, &p2sh_hash);
+    bool taproot_xonly = false;
+    int recid = get_btc_recid(sig[0], &compressed, &p2sh_hash, &taproot_xonly);
     if (recid == -1) {
         return ERROR_INVALID_ARG;
     }
@@ -229,6 +234,48 @@ static int _recover_secp256k1_pubkey_btc(const uint8_t *sig, size_t sig_len,
             out_pubkey[1] = 20;  // RIPEMD160 size
             *out_pubkey_size = 22;
         }
+
+        if (taproot_xonly) {
+            uint8_t tweak_k_data[96] = {
+                0xe8, 0x0f, 0xe1, 0x63, 0x9c, 0x9c, 0xa0, 0x50, 0xe3, 0xaf, 0x1b, 0x39, 0xc1, 0x43, 0xc6, 0x3e,
+                0x42, 0x9c, 0xbc, 0xeb, 0x15, 0xd9, 0x40, 0xfb, 0xb5, 0xc5, 0xa1, 0xf4, 0xaf, 0x57, 0xc5, 0xe9,
+                0xe8, 0x0f, 0xe1, 0x63, 0x9c, 0x9c, 0xa0, 0x50, 0xe3, 0xaf, 0x1b, 0x39, 0xc1, 0x43, 0xc6, 0x3e,
+                0x42, 0x9c, 0xbc, 0xeb, 0x15, 0xd9, 0x40, 0xfb, 0xb5, 0xc5, 0xa1, 0xf4, 0xaf, 0x57, 0xc5, 0xe9,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+            };
+            memcpy(&tweak_k_data[64], &out_pubkey[1], 32);
+
+            const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+            unsigned char tweak_k[SHA256_SIZE];
+            int err = md_string(md_info, tweak_k_data, 96, tweak_k);
+            if (err) return err;
+
+            secp256k1_pubkey pubkey;
+            out_pubkey[0] = 0x02;
+            if (secp256k1_ec_pubkey_parse(&context, &pubkey, out_pubkey, 33) != 1) {
+                return ERROR_WRONG_STATE;
+            }
+            if (secp256k1_ec_pubkey_tweak_add(&context, &pubkey, tweak_k) != 1) {
+                tweak_k[0] = 0x00;
+                if (secp256k1_ec_pubkey_tweak_add(&context, &pubkey, tweak_k) != 1) {
+                    return ERROR_WRONG_STATE;
+                }
+                tweak_k[0] = 0xff;
+                for (int i = 1; i < 32; i++) {
+                    tweak_k[i] = 0x00;
+                }
+                if (secp256k1_ec_pubkey_tweak_add(&context, &pubkey, tweak_k) != 1) {
+                    return ERROR_WRONG_STATE;
+                }
+            }
+            secp256k1_ec_pubkey_serialize(&context, out_pubkey, out_pubkey_size, &pubkey, SECP256K1_EC_COMPRESSED);
+            for (int i = 0; i < 32; i++) {
+                out_pubkey[i] = out_pubkey[i + 1];
+            }
+            *out_pubkey_size = 32;
+        }
+
     } else {
         *out_pubkey_size = UNCOMPRESSED_SECP256K1_PUBKEY_SIZE;
         flag = SECP256K1_EC_UNCOMPRESSED;

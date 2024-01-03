@@ -100,4 +100,3 @@ clean:
 	make -C deps/libecc clean
 
 .PHONY: all all-via-docker
-
