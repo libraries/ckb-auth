@@ -11,7 +11,8 @@ ckb2023 = ["ckb-auth-rs/ckb2023", "ckb-std/ckb2023"]
 enable-dynamic-library = ["ckb-auth-rs/dynamic-library-memory-600"]
 
 [dependencies]
-ckb-std = { version = "0.15", default-features = false, features = ["allocator", "ckb-types"] }
+#ckb-std = { version = "0.15", default-features = false, features = ["allocator", "ckb-types"] }
+ckb-std = { git="https://github.com/libraries/ckb-std", rev = "6a4c0a04f40374f875d1415daa55a41f0115713e", default-features = false, features = ["allocator", "ckb-types"] }
 ckb-auth-rs = { path = "../../../../ckb-auth-rs", default-features = false }
 log = { version = "0.4.17", default-features = false }
 hex = { version = "0.4.3", default-features = false, features = ["alloc"]}

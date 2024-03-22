@@ -16,7 +16,8 @@ dynamic-library-memory-400 = ["enable-dynamic-library"]
 dynamic-library-memory-600 = ["enable-dynamic-library"]
 
 [dependencies]
-ckb-std = { version = "0.15", default-features = false }
+#ckb-std = { version = "0.15", default-features = false }
+ckb-std = { git="https://github.com/libraries/ckb-std", rev = "6a4c0a04f40374f875d1415daa55a41f0115713e", default-features = false }
 lazy_static = { version = "1.4.0", optional = true, features = ["spin_no_std"] }
 
 [target.'cfg(target_arch = "riscv64")'.dependencies]

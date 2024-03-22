@@ -66,8 +66,7 @@ dependencies = [
 [[package]]
 name = "ckb-std"
 version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6f72eb58dfefcc444621dc97020ef96af0636aa59e26b9c110359cb6e37db59"
+source = "git+https://github.com/libraries/ckb-std?rev=31f4030#31f403029804b95c7a0123304b145f57508e9b99"
 dependencies = [
  "buddy-alloc",
  "cc",
